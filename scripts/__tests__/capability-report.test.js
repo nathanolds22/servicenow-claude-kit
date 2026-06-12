@@ -11,7 +11,7 @@ function freshReport(capabilities = {}) {
     return {
         schema_version: 1,
         generated_at: new Date().toISOString(),
-        instance_url: 'https://example.service-now.com',
+        instance_url: 'https://kit-test.example.com',
         capabilities,
     }
 }

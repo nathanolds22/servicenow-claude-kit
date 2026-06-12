@@ -42,6 +42,7 @@ const COPY_PATHS = [
     '.claude/rules',
     '.claude/skills',
     '.team/LESSONS.md',
+    '.team/SHIP_HISTORY.md',
     '.team/agent-findings/README.md',
     '.team/agent-findings/ledger.jsonl',
     '.team/instance-capabilities.json',
