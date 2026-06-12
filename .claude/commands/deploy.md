@@ -19,6 +19,7 @@ If `now.config.json` is absent → **STOP**: this project is MCP-first. Artifact
 - **Capability report fresh** (`npm run probe:summary` — no `[STALE]`). Stale → run `/capability_probe` first.
 - **Working tree clean** (`git status --porcelain`). Dirty → **STOP**: commit or stash; a deploy must be attributable to a commit.
 - **Green build**: `npx now-sdk build`. The readiness scan ($id uniqueness, reference resolution, enum correctness) is the pre-deploy contract — nothing deploys from a red build.
+- **Runtime-flip audit**: compare the live values of source-declared properties (kill switches, dispatch-path selectors, circuit states) against source. A deliberate live flip (incident response in progress) means **hold the deploy or fold the value into source first** — see §5; this deploy will revert it otherwise.
 - Quality gate: `bash scripts/quality-gate.sh`.
 
 ## 2. Deploy-path selection — positive evidence only
@@ -30,7 +31,9 @@ Branch via `getCapability()` on the project's SDK-install capability (probe clas
 | `true` (fresh, positive evidence) | `npx now-sdk install` — the supported path |
 | `false`, `unknown`, `n/a`, stale, or `--force-rest` | REST-bypass: walk the built update XML (`dist/app/update/*.xml`) and upsert each record via admin-basic-auth Table API |
 
-**Never take the SDK path on `unknown`** — `now-sdk install` can be broken per release family (upload-processor incompatibility, LESSONS #19); the safe default for unknown is the previous-behaviour path. If neither path has ever been probed on this instance, add the probe first (`.claude/rules/capability-report.md`).
+**Never take the SDK path on `unknown`** — `now-sdk install` can be broken per release family (upload-processor incompatibility, LESSONS #19); the safe default for unknown is the previous-behaviour path.
+
+The kit ships **no** `sdk_install.*` probe (it has no Fluent app of its own to upload) — the probe is project-supplied: add it when adopting the SDK, with a seeded `status: "unknown"` entry, per `.claude/rules/capability-report.md`. Until that probe exists and reads `true`, every deploy takes the REST-bypass path **by design** — that is the safe default working as intended, not an error.
 
 REST-bypass pattern (implement once as a project script, keep it idempotent):
 - GET by sys_id → PATCH if exists, POST if new. Stable `$id`s make re-runs no-op upserts.
@@ -46,16 +49,16 @@ Apply classes in this order, stopping on the first failure:
 3. **Properties**
 4. **Scheduled jobs**
 5. **Tool scripts** (AI-agent tools — their schemas must land with the body)
-6. Remaining surfaces (business rules, agents, REST APIs, UI) in dependency order
+6. Remaining surfaces (business rules, flows/subflows, agents, REST APIs, UI) in dependency order — a flow referenced by an agent tool lands before the tool's schema does
 
-A class out of order produces silent half-states (a BR referencing an undeployed SI compiles but dies at runtime; an agent tool whose m2m `inputs[]` schema lands without the body invents argument names — `.claude/rules/ai-tools.md`).
+A class out of order produces silent half-states (a BR referencing an undeployed SI compiles but dies at runtime; an agent tool whose m2m `inputs[]` schema lands without the body invents argument names — `.claude/rules/ai-tools.md`). If the build output touches any `sn_aia_*` surface, `sn_aia.installed` must read `OK` before that class is applied.
 
 ## 4. Post-deploy verification — read-back, not exit code
 
 For every deployed artifact: read it back via Table API / MCP `get_*` and assert the load-bearing fields match source (`/verify` discipline). Additionally:
 
 - **Parity check** after an SDK-path deploy — the SDK has had serialization bugs that mangle specific fields per release family; diff live values against source for the fields your app depends on.
-- **Trigger/flow health** if any trigger configuration was touched: bound flow `active=true, status=published` (LESSONS #15) — new trigger INSERTs still need one manual Studio Publish.
+- **Trigger/flow health** if any trigger configuration was touched: bound flow `active=true, status=published` (LESSONS #15) — new trigger INSERTs still need one manual Studio Publish. Gate the check itself on `getCapability('flow_designer.api_available') === true`; on `false`/`unknown`, record a manual-verify skip rather than misreading a 404 as a missing flow.
 - **Dictionary attributes** declared in source sync via admin-basic-auth `sys_dictionary` PATCH, gated on `table_api.sys_dictionary_writable` (script-path writes silently no-op — LESSONS #6).
 - **Prompt versions** if agent instructions changed: new published version entry, prior retired, hash lockfile regenerated (`.claude/rules/ai-agents.md`).
 

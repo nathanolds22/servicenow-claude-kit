@@ -34,9 +34,9 @@ Upsert: if the row exists with `value=true`, no-op; if it exists with another va
 | `user` | `<service account sys_id>` |
 | `sys_scope` | `global` |
 
-On insert the platform mints `client_id` and an encrypted `client_secret`. Read them back from the fresh record (`GlideEncrypter().decrypt(...)` for the secret, server-side only). On re-run, reconcile `user` + grant type rather than recreating.
+On insert the platform mints `client_id` and an encrypted `client_secret`. On re-run, reconcile `user` + grant type rather than recreating.
 
-**Secrets out-of-band**: print/stash the client_id + secret into the machine-local credential layer (env, gitignored `.env`, or `~/.claude.json` `mcpServers.<name>.env` as `A2A_OAUTH_CLIENT_ID` / `A2A_OAUTH_CLIENT_SECRET` — the layering in `scripts/lib/sn-creds.js`). Never commit them; never echo the secret into logs that get pasted into findings.
+**Secrets out-of-band — and never through the session transcript.** Anything a provisioning script returns or prints lands in session logs and gets pasted into findings, so: decrypt the secret (`GlideEncrypter().decrypt(...)`, server-side only) and have the script deliver it directly to the machine-local credential layer, returning only a confirmation shape (`{ stored: true, key: 'A2A_OAUTH_CLIENT_SECRET', length: <n> }`) — never the decrypted value itself. Storage layers: env, gitignored `.env`, or `~/.claude.json` `mcpServers.<name>.env` as `A2A_OAUTH_CLIENT_ID` / `A2A_OAUTH_CLIENT_SECRET` (the layering in `scripts/lib/sn-creds.js`). Never commit them.
 
 ## Step 3 — scope mapping (the rabbit hole)
 
@@ -62,13 +62,13 @@ A `requires_snc_internal_role` flag observed on the A2A endpoint is NOT a hard b
 
 If the caller uses asynchronous `message/send` (`configuration.blocking: false` with a `pushNotificationConfig.url`), the platform cross-checks the inline URL against the **External Agent Callback Registries** table `sn_aia_external_agent_callback_registry`. An unregistered URL fails with JSON-RPC error `-32003 Push Notification is not supported`.
 
-- Insert a row with the exact callback `url`, then verify it (`state=verified` — the UI's **Verify URL** button, or set state directly when scripting against a callback you control).
+- Insert a row with the exact callback `url`, then verify it. The UI's **Verify URL** button actually confirms reachability; scripting `state=verified` directly skips that confirmation — acceptable only for a callback endpoint you own and have independently proven reachable, and say so in the exposure finding. The registered URL should be an external HTTPS endpoint you control — the platform makes outbound requests to it.
 - Gotcha: a scoped-app callback endpoint's URL short-name is **platform-derived** (from `sys_package` vs `sys_scope.scope`, not customer-controllable) — read the working path off a live request rather than assuming it matches your scope name.
 - Caller attribution: `pushNotificationConfig.token` is forwarded verbatim as the `X-A2A-Notification-Token` header on the callback — it is the only channel that survives platform-side URL sanitisation (query strings are stripped). Use it to carry the caller identifier into your per-caller usage bucket.
 
 ## Verify, then declare
 
-Run `npm run probe:full` — `a2a.invocation_authenticated` flips to `OK` when the token mints. That probes auth only; the full smoke ([smoke.md](smoke.md)) proves the round-trip. Record the exposure in `.team/agent-findings/`.
+Run `npm run probe:full` — `a2a.invocation_authenticated` flips to `OK` when the token mints. That probes auth only: a fresh token is necessary but **not sufficient**. Complete the full smoke ([smoke.md](smoke.md), Stages 0–4) before recording the exposure in `.team/agent-findings/`.
 
 ## Revert
 

@@ -52,13 +52,16 @@ Every exposed agent's card needs, before you call it externally consumable:
 - A **description written for an external reader** — name the domain and the input/output shape; the card is the only thing a foreign orchestrator sees.
 - Non-empty **card-level** `defaultInputModes` / `defaultOutputModes` (convention: `["application/json"]`).
 - Non-empty **per-skill** `inputModes` / `outputModes` — note the field-name gotcha: skill-level arrays have **no `default` prefix**. Auditors checking `skills[].defaultInputModes` create phantom findings.
-- **STOP CONDITIONS intact** in the agent's instructions — external callers are the most likely source of adversarial or malformed input (`.claude/rules/ai-agents.md`).
+- **STOP CONDITIONS intact** in the agent's instructions — external callers are the most likely source of adversarial or malformed input (`.claude/rules/ai-agents.md`). For an A2A-exposed agent specifically, the stop conditions must explicitly reject instruction-marker content (`<system>`, `Ignore previous`, `New instructions:`) per `.claude/rules/ai-tools.md` — a generic tool-failure stop does not cover the injection surface, and the smoke ([reference/smoke.md](reference/smoke.md) Stage 0) treats its absence as BLOCKED.
 - Card `version` may be a **platform constant** (e.g. hard-coded `"1.0.0"`) regardless of `sn_aia_version` record state on some releases — verify before chasing version drift.
 
 ## Declaring an agent exposed — the gate
 
-1. `npm run probe:full` — the `a2a.invocation_authenticated` capability must be `OK` (token mints).
-2. Authenticated smoke round-trip lands PASS — [reference/smoke.md](reference/smoke.md). Card read alone is **not** sufficient.
-3. Record the exposure in `.team/agent-findings/` with the card URL, OAuth entity name, and an example request.
+0. `sn_aia.installed` reads `OK` in the capability report (no A2A surface without the plugin).
+1. `npm run probe:full` — the `a2a.invocation_authenticated` capability must be `OK`. That proves **auth provisioning only** (a token mints); it says nothing about the agent.
+2. Authenticated smoke round-trip lands PASS — [reference/smoke.md](reference/smoke.md), Stages 0–4. Card read alone is **not** sufficient.
+3. Record the exposure in `.team/agent-findings/` with the card URL, OAuth entity name, and an example request **with every credential value redacted** (`Authorization: Bearer <redacted>`) — never a live token, client_id, or secret in a committed file.
+
+**Re-exposure after a prompt bump**: every instruction change to an exposed agent (new version published, prior retired) re-runs the Stage 0 stop-condition presence check and the authenticated smoke before the new version counts as exposed — `.claude/rules/ai-agents.md` makes the presence check part of any prompt-bump gate, and external callers see the new prompt immediately.
 
 Failures along the way: [reference/troubleshooting.md](reference/troubleshooting.md) (401 vs 403 vs empty card vs protocol-level errors).

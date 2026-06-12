@@ -12,12 +12,14 @@ The ship gate is too consequential to run on a fuzzy view of the instance. **STO
 
 ```bash
 node -e "
-const { loadReport, isStale } = require('./scripts/lib/capability-report');
-const r = loadReport();
-if (isStale(r)) { console.error('STALE/missing capability report — run /capability_probe first'); process.exit(1); }
-const errs = Object.entries(r.capabilities || {}).filter(([, c]) => c.status === 'error');
-if (errs.length) { console.error('ERROR entries: ' + errs.map(([k]) => k).join(', ') + ' — re-probe before shipping'); process.exit(1); }
-console.log('capability gate OK (generated ' + r.generated_at + ')');
+try {
+  const { loadReport, isStale } = require('./scripts/lib/capability-report');
+  const r = loadReport();
+  if (isStale(r)) { console.error('STALE/missing capability report — run /capability_probe first'); process.exit(1); }
+  const errs = Object.entries(r.capabilities || {}).filter(([, c]) => c.status === 'error');
+  if (errs.length) { console.error('ERROR entries: ' + errs.map(([k]) => k).join(', ') + ' — re-probe before shipping'); process.exit(1); }
+  console.log('capability gate OK (generated ' + r.generated_at + ')');
+} catch (e) { console.error('capability report unreadable (' + e.message + ') — fix or delete it, then run /capability_probe'); process.exit(1); }
 "
 ```
 
@@ -35,7 +37,7 @@ Launch the kit's live-capable agents **in a single message** (one Agent call eac
 | `security-auditor` | ACL coverage on app tables, over-privileged accounts, exposed endpoints, secrets |
 | `architect-cert-reviewer` | AI/LLM surfaces — stop conditions, prompt-version hygiene, circuit breakers, tool schemas |
 
-Skip an agent only when its surface demonstrably doesn't exist on the instance (e.g. no sn_aia plugin → no cert review); record the skip + reason in the report.
+Skip an agent only when its surface demonstrably doesn't exist on the instance (e.g. no sn_aia plugin → no cert review) — and cite the capability-report entry or read-back that proves the absence; a skip without evidence is itself a finding. Phase 4 records dispatched-vs-applicable counts so a quietly under-populated fan-out is visible in the log.
 
 ## Phase 2 — Browser smoke (CONDITIONAL)
 
@@ -46,18 +48,19 @@ Otherwise record **N/A with the rationale** (e.g. "no UI surface — kit/backend
 ## Phase 3 — Synthesize
 
 - Deduplicate findings; keep the highest severity on conflict.
-- **Adversarially verify every CRITICAL/HIGH yourself** against the live instance (read-only) before reporting — agents produce plausible-but-wrong findings.
+- **Adversarially verify every CRITICAL/HIGH yourself** against the live instance (read-only) before reporting — agents produce plausible-but-wrong findings. Record, per finding, the specific read that confirmed or refuted it (table/query + what came back); a verification without evidence is narrative, not a gate. The evidence reference goes into the ledger row (`"verified_by"`).
 - Verdict: **READY** (no CRITICAL/HIGH confirmed), **REVIEW** (HIGHs need a human call), **BLOCKED** (CRITICAL confirmed, or required browser smoke failed).
+- A REVIEW verdict has a defined exit: fix the HIGHs and re-run `/ship` to READY, **or** record an explicit risk-acceptance (who accepted, why) in the SHIP_HISTORY line. Two operators reading the same REVIEW must reach the same next action.
 
 ## Phase 4 — Record
 
 Append **one line per run** (verdict reached, even BLOCKED — "we ran ship and the answer was no" is a release artifact) to [.team/SHIP_HISTORY.md](../../.team/SHIP_HISTORY.md), format documented in that file:
 
 ```
-- <ISO8601> | <branch> | <verdict> | agents: <n> | browser: <PASS|FAIL|N/A — rationale> | top finding: <one line or none>
+- <ISO8601 UTC> | <branch> | <verdict> | agents: <dispatched>/<applicable> | browser: <PASS|FAIL|N/A — rationale> | top finding: <one line or none>
 ```
 
-Append-only — never edit prior lines. Confirmed findings also go to `.team/agent-findings/ledger.jsonl` (same shape as `/team_review` Phase 3); reusable platform gotchas earn a LESSONS.md bullet.
+Append-only — never edit prior lines. Keep the top-finding text **generic**: no instance hostnames, scope names, or sys_ids in this committed file — full evidence belongs in `.team/agent-findings/`. Confirmed findings also go to `.team/agent-findings/ledger.jsonl` (same shape as `/team_review` Phase 3, plus the `"verified_by"` evidence reference); reusable platform gotchas earn a LESSONS.md bullet.
 
 ## What /ship does NOT do
 

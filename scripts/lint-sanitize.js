@@ -25,6 +25,11 @@ const BANNED = [
     { re: /(?<![a-z0-9])pgr/i, why: 'source-project domain prefix' },
     { re: /\bfca\b/i, why: 'source-project regulatory domain' },
     { re: /tstsandbox/i, why: 'source-project instance hostname' },
+    // Any concrete instance hostname (a leading host label is required, so the
+    // template placeholder `<instance>.service-now.com` survives — `>` breaks
+    // the label match). Consumer projects that commit instance-bearing files
+    // (e.g. their capability report) should drop or scope this entry.
+    { re: /[a-z0-9][a-z0-9-]*\.service-now\.com/i, why: 'instance hostname' },
     { re: /adam\s*hoffman/i, why: 'person name' },
     { re: /\b(ageas|aviva|allianz)\b/i, why: 'source-project insurer name' },
     { re: /\/Users\/[A-Za-z]/, why: 'personal absolute path (use ~ or relative paths)' },
