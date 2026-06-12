@@ -65,6 +65,36 @@ function parseFamily(buildtag) {
     return m ? m[1].toLowerCase() : null
 }
 
+// Delete stray sentinels left by an interrupted earlier --full run (a kill
+// between a probe's POST and DELETE orphans the row — there is no try/finally
+// across process death). Load-bearing for sn_aia_agent: it has a unique DB
+// index on internal_name (scope.scope.name), so ONE orphan makes every later
+// same-name insert fail with a misleading Table-API 403 and flips the
+// capability to a false NO (seen live 2026-06-12; see .team/agent-findings/).
+// Sentinel rows are probe-owned by definition, so sweeping them is sanctioned.
+// Returns { cleaned, problems } — problems is null on a clean sweep, else a
+// short token ('sweep-get-http-403', 'sweep-delete-failed-2') so evidence can
+// distinguish "zero strays found" from "could not look / could not delete".
+async function cleanStraySentinels(table) {
+    const res = await api('GET', `/api/now/table/${table}?sysparm_query=nameSTARTSWITH${SENTINEL_PREFIX}&sysparm_fields=sys_id&sysparm_limit=100`)
+    if (res.status !== 200) return { cleaned: 0, problems: `sweep-get-http-${res.status}` }
+    const rows = res.json()?.result || []
+    let cleaned = 0
+    let failed = 0
+    for (const row of rows) {
+        const del = await api('DELETE', `/api/now/table/${table}/${row.sys_id}`)
+        if (del.status === 204 || del.status === 200) cleaned++
+        else failed++
+    }
+    return { cleaned, problems: failed ? `sweep-delete-failed-${failed}` : null }
+}
+
+// Spread into evidence: always records the count, adds sweep_problems only
+// when the sweep itself misbehaved.
+function sweepEvidence(sweep) {
+    return { strays_cleaned: sweep.cleaned, ...(sweep.problems ? { sweep_problems: sweep.problems } : {}) }
+}
+
 // Shared by the a2a.* probes: mint a client-credentials Bearer token against
 // /oauth_token.do. Side effect (why a2a.* probes are --full): the instance
 // issues a short-lived oauth token credential server-side; no rows the probe
@@ -142,18 +172,19 @@ const PROBES = [
         mode: 'full',
         expected: 'Table API can insert, update, and delete a probe-owned sentinel row (sys_user_preference)',
         async run() {
+            const sweep = await cleanStraySentinels('sys_user_preference')
             const post = await api('POST', '/api/now/table/sys_user_preference', {
                 name: `${SENTINEL_PREFIX}.table_api_write`,
                 value: 'probe',
                 description: 'servicenow-claude-kit capability probe sentinel — safe to delete',
             })
-            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200) }, 'full')
+            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200), ...sweepEvidence(sweep) }, 'full')
             const sysId = post.json()?.result?.sys_id
             const patch = await api('PATCH', `/api/now/table/sys_user_preference/${sysId}`, { value: 'probe-updated' })
             const del = await api('DELETE', `/api/now/table/sys_user_preference/${sysId}`)
             const allOk = patch.status === 200 && (del.status === 204 || del.status === 200)
-            if (allOk) return ok('insert-update-delete', { sentinel_sys_id: sysId }, 'full')
-            return no('partial', { insert: post.status, update: patch.status, delete: del.status, sentinel_sys_id: sysId }, 'full')
+            if (allOk) return ok('insert-update-delete', { sentinel_sys_id: sysId, ...sweepEvidence(sweep) }, 'full')
+            return no('partial', { insert: post.status, update: patch.status, delete: del.status, sentinel_sys_id: sysId, ...sweepEvidence(sweep) }, 'full')
         },
     },
     {
@@ -232,15 +263,18 @@ const PROBES = [
         async run() {
             const probe = await api('GET', '/api/now/table/sn_aia_agent?sysparm_fields=sys_id&sysparm_limit=1')
             if (probe.status !== 200) return na('sn_aia-absent', { http: probe.status }, 'full')
+            // Pre-clean is load-bearing here (unique internal_name index — see
+            // cleanStraySentinels). Without it, one orphan = permanent false NO.
+            const sweep = await cleanStraySentinels('sn_aia_agent')
             const post = await api('POST', '/api/now/table/sn_aia_agent', {
                 name: `${SENTINEL_PREFIX} agent`,
                 description: 'servicenow-claude-kit capability probe sentinel — safe to delete',
                 active: 'false',
             })
-            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200) }, 'full')
+            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200), ...sweepEvidence(sweep), hint: 'a 403 here can be a duplicate-internal_name collision with an orphaned sentinel, not ACL — check the syslog SQL error' }, 'full')
             const sysId = post.json()?.result?.sys_id
             const del = await api('DELETE', `/api/now/table/sn_aia_agent/${sysId}`)
-            if (del.status === 204 || del.status === 200) return ok('insert-delete', { sentinel_sys_id: sysId }, 'full')
+            if (del.status === 204 || del.status === 200) return ok('insert-delete', { sentinel_sys_id: sysId, ...sweepEvidence(sweep) }, 'full')
             return no(`delete-http-${del.status}`, { sentinel_sys_id: sysId, delete: del.status, hint: 'sentinel row left behind — delete manually' }, 'full')
         },
     },
@@ -259,15 +293,16 @@ const PROBES = [
         mode: 'full',
         expected: 'sc_cat_item rows can be created and deleted via Table API (catalog authoring path works)',
         async run() {
+            const sweep = await cleanStraySentinels('sc_cat_item')
             const post = await api('POST', '/api/now/table/sc_cat_item', {
                 name: `${SENTINEL_PREFIX} item`,
                 short_description: 'servicenow-claude-kit capability probe sentinel — safe to delete',
                 active: 'false',
             })
-            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200) }, 'full')
+            if (post.status !== 201) return no(`insert-http-${post.status}`, { http: post.status, body: post.body.slice(0, 200), ...sweepEvidence(sweep) }, 'full')
             const sysId = post.json()?.result?.sys_id
             const del = await api('DELETE', `/api/now/table/sc_cat_item/${sysId}`)
-            if (del.status === 204 || del.status === 200) return ok('insert-delete', { sentinel_sys_id: sysId }, 'full')
+            if (del.status === 204 || del.status === 200) return ok('insert-delete', { sentinel_sys_id: sysId, ...sweepEvidence(sweep) }, 'full')
             return no(`delete-http-${del.status}`, { sentinel_sys_id: sysId, delete: del.status, hint: 'sentinel row left behind — delete manually' }, 'full')
         },
     },
@@ -341,7 +376,7 @@ const PROBES = [
                 http: res.status,
                 agent_sys_id: agentId,
                 body: text.slice(0, 200),
-                hint: 'token mints but the card surface is dark — check the AI Agent Studio "Allow third party to access ServiceNow AI agents" toggle',
+                hint: 'token mints but the card surface is dark — exposure is PER-AGENT: a 400 "No agent available" for every agent usually means zero sn_aia_external_agent_configuration rows (nothing exposed). Provision via AI Agent Studio third-party access (Settings toggle + per-agent config); see the a2a-usage skill.',
             }, 'full')
         },
     },

@@ -16,6 +16,7 @@ Hard-won, production-verified platform behaviours. Each cost real debugging time
 7. **Some tables silently roll back scripted writes entirely** (e.g. `sys_ui_bookmark` via a bridged session: `insert()` returns null, `deleteRecord()` rolls back, no error). Direct admin-basic-auth REST works. When a scripted write "succeeds" but the row isn't there, switch transports before debugging logic.
 8. **Platform-minted sys_ids**: `sys_security_acl`, `sys_security_acl_role`, and `sn_aia_version` ignore caller-supplied sys_ids on insert. Declared IDs are anchors only; reconcile live state by natural key and design deployers to remap references.
 9. **Every new domain table needs explicit ACLs in source** — default inheritance leaves it world-readable to any authenticated user via the Table API. The single most recurring security finding.
+21. **(2026-06-12) A Table-API 403 "Operation Failed / Error during insert" can be a unique-index collision, not ACL** — e.g. `sn_aia_agent.internal_name` (`scope.scope.name`) is DB-unique, so one leftover same-name row makes every subsequent insert 403. Read the `syslog` `FAILED TRYING TO EXECUTE` row for the underlying `BatchUpdateException` before debugging security; any process writing fixed-name sentinel rows must pre-clean strays (a kill between insert and delete orphans them).
 
 ## Scoped-app sandbox
 
