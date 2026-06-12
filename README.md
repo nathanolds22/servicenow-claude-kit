@@ -28,14 +28,17 @@ node install.js --into /path/to/existing-repo   # add --dry-run first if cautiou
 ```
 .claude/
   settings.json        SessionStart capability summary · PreToolUse execute_script warning · adaptive Stop quality gate
-  commands/            /bootstrap · /capability_probe · /verify · /team_review
+  commands/            /bootstrap · /capability_probe · /verify · /team_review ·
+                       /deploy (Fluent-adopted projects) · /ship (read-only release gate)
   agents/              code-reviewer · security-auditor · performance-auditor ·
                        capability-auditor · now-platform-best-practices · architect-cert-reviewer
   rules/               capability-report · ai-agents · ai-tools · a2a-exposure · fluent-metadata
-  skills/              servicenow-docs (index → grep → read; no embeddings)
+  skills/              servicenow-docs (index → grep → read; no embeddings) ·
+                       a2a-usage (A2A decision tree + OAuth provisioning + smoke)
 .team/
   instance-capabilities.json   the capability report (probe-written, getCapability()-read)
   LESSONS.md                   20 production-verified, instance-independent platform gotchas
+  SHIP_HISTORY.md              append-only /ship verdict log
   agent-findings/              dated root-cause narratives (your project's durable memory)
 scripts/
   probe-instance-capabilities.js   ~13 universal probes (--quick read-only / --full sentinel writes)
@@ -44,6 +47,10 @@ scripts/
   quality-gate.sh                  adaptive Stop-hook gate (runs only the gates that exist)
   lib/                             sn-creds (layered resolution) · sn-rest · capability-report
 ```
+
+### Hook escape hatches — developer machines only
+
+Two env vars skip the shared hooks wired in `.claude/settings.json`: `SKIP_QUALITY_GATE=1` (Stop-hook quality gate) and `SKIP_PROBE_SUMMARY=1` (SessionStart capability summary). They exist for offline work and hook debugging on a developer machine — **never set them in CI**. CI runs the real gates directly (sanitize, unit tests) and enforces `.team/SHIP_HISTORY.md` as append-only with a dedicated workflow job, so a bypassed local gate never becomes a bypassed merge gate.
 
 ### The capability report — instance self-awareness
 
@@ -64,7 +71,7 @@ The kit works day one with only the MCP server (read, analyze, build via MCP pow
 ## Roadmap
 
 - **Wave 2** — build-skills: `create-dashboard` (Platform Analytics, with the pa_scripts/integer-id/frozen-value traps baked in) · `create-catalog-item` · `flows` (lifecycle + FlowAPI invocation; honest about the no-programmatic-authoring boundary) · `create-agentic-workflow` (sn_aia anatomy, stop conditions, dispatch verification via A2A).
-- **Wave 3** — `a2a-usage` skill (decision tree + OAuth provisioning + smoke), `/deploy` + `/ship` release gate for Fluent-adopted projects.
+- **Wave 3** *(shipped)* — `a2a-usage` skill (decision tree + OAuth provisioning + smoke), `/deploy` (Fluent-adopted projects) + `/ship` read-only release gate.
 
 ## License
 
