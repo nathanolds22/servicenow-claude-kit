@@ -17,6 +17,7 @@
     "catalog.read": { "status": "unknown", "expected": "sc_cat_item readable", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "catalog.writable": { "status": "unknown", "expected": "sc_cat_item create/delete works via Table API", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "pa.plugin_active": { "status": "unknown", "expected": "Platform Analytics installed (pa_dashboards readable)", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
-    "a2a.invocation_authenticated": { "status": "unknown", "expected": "OAuth client-credentials + a2aauthscope mints a Bearer token", "observed": null, "probed_at": null, "probe_method": null, "evidence": null }
+    "a2a.invocation_authenticated": { "status": "unknown", "expected": "OAuth client-credentials + a2aauthscope mints a Bearer token", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
+    "a2a.card_readable": { "status": "unknown", "expected": "A2A agent-card endpoint returns 200 + protocolVersion for a Bearer-authenticated GET (informational until a consumer branches on it)", "observed": null, "probed_at": null, "probe_method": null, "evidence": null }
   }
 }

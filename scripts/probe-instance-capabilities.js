@@ -24,7 +24,7 @@
 
 'use strict'
 
-const { api, executeScript, readBuildTag } = require('./lib/sn-rest')
+const { api, executeScript, readBuildTag, getCreds } = require('./lib/sn-rest')
 const { envValue } = require('./lib/sn-creds')
 const {
     REPORT_PATH,
@@ -63,6 +63,34 @@ function err(observed, evidence, method) {
 function parseFamily(buildtag) {
     const m = String(buildtag).match(/^glide-([a-z]+)/i)
     return m ? m[1].toLowerCase() : null
+}
+
+// Shared by the a2a.* probes: mint a client-credentials Bearer token against
+// /oauth_token.do. Side effect (why a2a.* probes are --full): the instance
+// issues a short-lived oauth token credential server-side; no rows the probe
+// must clean up. `configured: false` means no OAuth client env vars are set.
+async function mintA2AToken() {
+    const clientId = envValue('A2A_OAUTH_CLIENT_ID')
+    const clientSecret = envValue('A2A_OAUTH_CLIENT_SECRET')
+    if (!clientId || !clientSecret) return { configured: false }
+    const c = getCreds()
+    const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret })
+    const res = await fetch(c.url + '/oauth_token.do', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+    })
+    const text = await res.text()
+    let token = null
+    let expiresIn = null
+    try {
+        const parsed = JSON.parse(text)
+        token = parsed.access_token || null
+        expiresIn = parsed.expires_in ?? null
+    } catch {
+        /* non-JSON error body */
+    }
+    return { configured: true, http: res.status, token, expires_in: expiresIn, bodyText: text }
 }
 
 const PROBES = [
@@ -258,29 +286,63 @@ const PROBES = [
         name: 'a2a.invocation_authenticated',
         mode: 'full',
         expected: 'OAuth client-credentials + a2aauthscope mints a Bearer token (A2A invocation auth chain is provisioned)',
+        // Side effect: token minting only (see mintA2AToken) — no instance rows touched.
         async run() {
-            const clientId = envValue('A2A_OAUTH_CLIENT_ID')
-            const clientSecret = envValue('A2A_OAUTH_CLIENT_SECRET')
-            if (!clientId || !clientSecret) {
+            const mint = await mintA2AToken()
+            if (!mint.configured) {
                 return na('no-oauth-client-configured', { hint: 'provision per the a2a-exposure rule, then set A2A_OAUTH_CLIENT_{ID,SECRET}' }, 'full')
             }
-            const { getCreds } = require('./lib/sn-rest')
+            // expires_in goes into evidence so a later flip has a fuller audit
+            // trail (token lifetime is part of the provisioned-auth contract).
+            if (mint.http === 200 && mint.token) return ok('token-minted', { http: mint.http, expires_in: mint.expires_in }, 'full')
+            return no(`http-${mint.http}`, { http: mint.http, body: mint.bodyText.slice(0, 200) }, 'full')
+        },
+    },
+    {
+        name: 'a2a.card_readable',
+        mode: 'full',
+        expected: 'A2A agent-card endpoint returns HTTP 200 + protocolVersion for a Bearer-authenticated GET (informational until a consumer branches on it; catches token-mints-but-card-surface-dark, e.g. the Studio third-party-access toggle off)',
+        // Side effect: token minting only (see mintA2AToken) — the agent list
+        // and card read are plain GETs; no instance rows touched.
+        async run() {
+            const mint = await mintA2AToken()
+            if (!mint.configured) {
+                return na('no-oauth-client-configured', { hint: 'provision per the a2a-exposure rule, then set A2A_OAUTH_CLIENT_{ID,SECRET}' }, 'full')
+            }
+            if (!(mint.http === 200 && mint.token)) {
+                return err('token-mint-failed', { http: mint.http, hint: 'card readability not assessable without a token — see a2a.invocation_authenticated' }, 'full')
+            }
+            // Never filter this query on `active`: the column is not queryable on
+            // Australia-family instances and the query dies with a misleading 403
+            // "Field(s) present in the query do not have permission".
+            const agents = await api('GET', '/api/now/table/sn_aia_agent?sysparm_fields=sys_id&sysparm_limit=1')
+            if (agents.status === 400 || agents.status === 404) return na('sn_aia-absent', { http: agents.status }, 'full')
+            if (agents.status !== 200) return err(`agent-list-http-${agents.status}`, { http: agents.status, body: agents.body.slice(0, 200) }, 'full')
+            const agentId = agents.json()?.result?.[0]?.sys_id
+            if (!agentId) return na('no-agent-rows', { hint: 'no sn_aia_agent row to read a card for' }, 'full')
             const c = getCreds()
-            const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret })
-            const res = await fetch(c.url + '/oauth_token.do', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body.toString(),
+            const res = await fetch(`${c.url}/api/sn_aia/a2a/v2/agent_card/id/${agentId}`, {
+                headers: { Authorization: `Bearer ${mint.token}`, Accept: 'application/json' },
             })
             const text = await res.text()
-            let token = null
+            let card = null
             try {
-                token = JSON.parse(text).access_token || null
+                card = JSON.parse(text)
             } catch {
-                /* non-JSON error body */
+                /* non-JSON body */
             }
-            if (res.status === 200 && token) return ok('token-minted', { http: res.status }, 'full')
-            return no(`http-${res.status}`, { http: res.status, body: text.slice(0, 200) }, 'full')
+            if (res.status === 200 && card?.protocolVersion) {
+                return ok('card-read', { http: res.status, agent_sys_id: agentId, protocol_version: card.protocolVersion }, 'full')
+            }
+            if (res.status === 200) {
+                return no('200-no-protocolVersion', { http: res.status, agent_sys_id: agentId, body: text.slice(0, 200) }, 'full')
+            }
+            return no(`http-${res.status}`, {
+                http: res.status,
+                agent_sys_id: agentId,
+                body: text.slice(0, 200),
+                hint: 'token mints but the card surface is dark — check the AI Agent Studio "Allow third party to access ServiceNow AI agents" toggle',
+            }, 'full')
         },
     },
 ]
