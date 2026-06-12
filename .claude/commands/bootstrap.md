@@ -34,19 +34,27 @@ npm run docs:servicenow:detect
 
 This reads the instance's `glide.buildtag`, derives the release family, and fetches the matching ServiceNowDocs branch. If the family's branch was deleted upstream (old release), pick the nearest available branch with `npm run docs:servicenow -- --branch <name>` and note the mismatch in CLAUDE.md.
 
-## Step 5 — Fill CLAUDE.md coordinates
+## Step 5 — Activate the versioned git hooks
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This wires the committed [.githooks/pre-commit](../../.githooks/pre-commit) — the sanitize gate run against the git index — so a manual `git commit -a` can't land a banned-string commit before CI sees it. The setting is per-clone (it does NOT travel with the repo), which is why this step exists: re-run on every new machine; idempotent. Verify: `git config core.hooksPath` prints `.githooks`.
+
+## Step 6 — Fill CLAUDE.md coordinates
 
 Open [CLAUDE.md](../../CLAUDE.md) and replace the `<placeholders>` in the Coordinates section: instance URL, application scope (if any), integration user. Keep it short — the capability report carries the live state; CLAUDE.md only carries the pointers.
 
-## Step 6 — Seed auto-memory
+## Step 7 — Seed auto-memory
 
 Write these as memory files (per the harness memory instructions), so every future session starts oriented:
 
 - **user**: who the operator is (role, team) — ask if unknown.
-- **project**: instance URL + scope + integration user (the coordinates from step 5).
+- **project**: instance URL + scope + integration user (the coordinates from step 6).
 - **feedback**: "Ground ServiceNow platform claims via the `servicenow-docs` skill before asserting; do not answer platform-behaviour questions from memory."
 - **feedback**: "`.team/instance-capabilities.json` (via `getCapability()`) is the source of truth for instance state; never assume a capability from docs or precedent."
 
-## Step 7 — Confirm
+## Step 8 — Confirm
 
 A fresh session should now print the capability summary at SessionStart and recall the seeded memories. Tell the operator bootstrap is complete and list anything left `NO`/`unknown` that they may want to fix (god-mode endpoint deploy, A2A OAuth provisioning, `probe:full` for write-path capabilities).

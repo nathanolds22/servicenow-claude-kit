@@ -55,6 +55,7 @@ const COPY_PATHS = [
     'scripts/lint-sanitize.js',
     'scripts/quality-gate.sh',
     'scripts/__tests__/capability-report.test.js',
+    '.githooks/pre-commit',
     '.env.example',
 ]
 
@@ -87,7 +88,7 @@ function copyOne(rel) {
     if (!DRY) {
         fs.mkdirSync(path.dirname(dst), { recursive: true })
         fs.writeFileSync(dst, srcBody)
-        if (rel.endsWith('.sh') || rel.startsWith('scripts/')) {
+        if (rel.endsWith('.sh') || rel.startsWith('scripts/') || rel.startsWith('.githooks/')) {
             try {
                 fs.chmodSync(dst, fs.statSync(src).mode)
             } catch {}

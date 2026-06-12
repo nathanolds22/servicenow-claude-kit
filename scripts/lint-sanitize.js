@@ -7,6 +7,14 @@
 // personal absolute paths. Run via `npm run lint:sanitize`; enforced in CI
 // and by the Stop-hook quality gate.
 //
+// Tracked files are scanned from the git INDEX (the content a commit would
+// record), not the working tree: the gate's job is to keep banned strings out
+// of the REPO, and a live capability report sitting unstaged in the working
+// tree (instance hostname and all) must not block the gate while the
+// committed seed stays clean. Staging such a file flips the gate red before
+// it can be committed. Untracked-unignored files have no index content and
+// are scanned from disk.
+//
 // This file is self-excluded (it must name the banned patterns). Hiding a
 // banned string here would survive the gate — PR review covers that.
 
@@ -42,22 +50,26 @@ const BANNED = [
 
 const SKIP_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.ico', '.woff', '.woff2', '.zip'])
 
-function trackedFiles() {
-    const out = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
-        cwd: REPO_ROOT,
-        encoding: 'utf8',
-    })
+function gitLines(args) {
+    const out = execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })
     return out.split('\n').filter(Boolean)
 }
 
+const targets = [
+    ...gitLines(['ls-files', '--cached']).map((rel) => ({ rel, source: 'index' })),
+    ...gitLines(['ls-files', '--others', '--exclude-standard']).map((rel) => ({ rel, source: 'worktree' })),
+]
+
 let failures = 0
-for (const rel of trackedFiles()) {
+for (const { rel, source } of targets) {
     if (rel === SELF) continue
     if (SKIP_EXT.has(path.extname(rel).toLowerCase())) continue
-    const abs = path.join(REPO_ROOT, rel)
     let text
     try {
-        text = fs.readFileSync(abs, 'utf8')
+        text =
+            source === 'index'
+                ? execFileSync('git', ['show', `:${rel}`], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+                : fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8')
     } catch {
         continue
     }

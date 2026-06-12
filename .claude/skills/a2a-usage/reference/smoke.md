@@ -4,6 +4,8 @@ Five stages with PASS / BLOCKED / FAIL semantics: **BLOCKED** = the chain is bro
 
 Credentials resolve via the layered lookup in `scripts/lib/sn-creds.js` (`SERVICENOW_INSTANCE_URL` for the base URL, `A2A_OAUTH_CLIENT_ID` / `A2A_OAUTH_CLIENT_SECRET` for the OAuth client).
 
+> **Validation status**: Stages 0–2 and the Stage 3 *error* contract are live-verified. A full Stage 3 PASS → Stage 4 round-trip has **not** yet been executed by the kit's own validation (the callback registry row is operator-governed shared config and needs a caller-owned endpoint) — see [.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md](../../../../.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md). The first full PASS on your instance is part of adopting this recipe, not a formality.
+
 ## Stage 0 — stop-condition presence check (gate)
 
 Before sending anything, read the agent's instruction set (Table API GET on the `sn_aia_agent` record) and assert a STOP CONDITIONS block exists **and** explicitly rejects instruction-marker content (`<system>`, `Ignore previous`, `New instructions:`). Absent or softened → **BLOCKED**: do not smoke, and do not expose, an agent whose adversarial-input defence is missing (`.claude/rules/ai-agents.md` — stop conditions are load-bearing). Re-run this stage after every prompt bump of an exposed agent.
@@ -59,7 +61,7 @@ Content-Type: application/json
 }
 ```
 
-Use a probe message that explicitly forbids tool invocation so the smoke is cheap and side-effect-free (the message text is a courtesy, not a defence — the defence is the Stage 0 stop-condition gate). For a synchronous smoke without callback infrastructure, set `"blocking": true` and omit `pushNotificationConfig` (async requires the callback-registry row — [provisioning.md](provisioning.md) step 5). Reserve a recognisable caller token — replace the placeholder with a concrete value like `smoke-<yyyymmdd>`; sending a literal `<project>-smoke` placeholder pollutes real-caller usage buckets — so dashboards can filter smoke traffic.
+Use a probe message that explicitly forbids tool invocation so the smoke is cheap and side-effect-free (the message text is a courtesy, not a defence — the defence is the Stage 0 stop-condition gate). Do not expect `"blocking": true` to spare you the callback registry: on current families the flag is ignored and `message/send` without a registered push config still fails with `-32602 "Push Notification URL is required for asynchronous requests"` (live-verified 2026-06-12) — the callback-registry row from [provisioning.md](provisioning.md) step 5 is required for every smoke. Reserve a recognisable caller token — replace the placeholder with a concrete value like `smoke-<yyyymmdd>`; sending a literal `<project>-smoke` placeholder pollutes real-caller usage buckets — so dashboards can filter smoke traffic.
 
 Interpret the status precisely:
 
