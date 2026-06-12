@@ -1,0 +1,15 @@
+# Credentials — never commit
+.env
+.env.*
+
+# ServiceNow docs mirror — vendored locally, reproducibility lives in servicenow-docs.lock.json
+vendor/servicenow-docs/
+
+# Per-developer Claude Code overrides
+.claude/settings.local.json
+
+# Node
+node_modules/
+
+# OS noise
+.DS_Store

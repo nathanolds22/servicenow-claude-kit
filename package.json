@@ -1,0 +1,26 @@
+{
+  "name": "servicenow-claude-kit",
+  "version": "0.1.0",
+  "description": "Portable Claude Code scaffolding for ServiceNow projects: instance capability report, docs grounding, hooks, reviewer agents, and build-skill recipes. Companion to the servicenow-mcp server.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathanolds22/servicenow-claude-kit.git"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "probe": "node scripts/probe-instance-capabilities.js",
+    "probe:quick": "node scripts/probe-instance-capabilities.js --quick",
+    "probe:full": "node scripts/probe-instance-capabilities.js --full",
+    "probe:summary": "node scripts/probe-instance-capabilities.js --print-summary",
+    "docs:servicenow": "node scripts/fetch-servicenow-docs.js",
+    "docs:servicenow:check": "node scripts/fetch-servicenow-docs.js --check",
+    "docs:servicenow:detect": "node scripts/fetch-servicenow-docs.js --detect",
+    "lint:sanitize": "node scripts/lint-sanitize.js",
+    "quality-gate": "bash scripts/quality-gate.sh",
+    "test": "node --test scripts/__tests__/*.test.js",
+    "postinstall": "node scripts/probe-instance-capabilities.js --lazy 2>/dev/null || true"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_doc": "Project-scoped Claude Code settings shipped by servicenow-claude-kit. Hooks are SHARED across the team — keep them low-risk and skip-able. Per-developer overrides go in .claude/settings.local.json (gitignored).",
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/probe-instance-capabilities.js:*)",
+      "Bash(npm run probe:*)",
+      "Bash(npm run lint:sanitize)",
+      "Bash(npm run quality-gate)",
+      "Bash(bash scripts/quality-gate.sh)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test \"${SKIP_PROBE_SUMMARY:-}\" = \"1\" || node scripts/probe-instance-capabilities.js --print-summary 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__ServiceNow__execute_script",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"try { const { getCapability } = require('./scripts/lib/capability-report'); const dict = getCapability('table_api.sys_dictionary_writable'); const scope = getCapability('execute_script.runs_global_scope'); if (scope === false) { process.stderr.write('[capability] WARN: execute_script runs in a SCOPED sandbox on this instance — sys_dictionary and other sys_* metadata writes will silently no-op. Use admin-basic-auth Table API PATCH for metadata edits.\\n'); } if (dict === false) { process.stderr.write('[capability] WARN: table_api.sys_dictionary_writable=false — the Table API metadata-PATCH path is ALSO failing on this instance. Metadata mutation currently has no verified working path; probe again with npm run probe:full before assuming a write landed.\\n'); } } catch (e) {}\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test \"${SKIP_QUALITY_GATE:-}\" = \"1\" || bash scripts/quality-gate.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
