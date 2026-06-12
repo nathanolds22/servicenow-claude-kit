@@ -279,6 +279,50 @@ const PROBES = [
         },
     },
     {
+        name: 'sn_aia.external_agent_api_available',
+        mode: 'quick',
+        expected: 'External-agent dispatch API (POST /api/sn_aia/agenticai/v1/agent/id/<id>) is deployed and its property gate is on — read-only evidence only (POST route rows in sys_ws_operation + sn_aia.external_agents.enabled=true); the probe never dispatches, so the live round-trip proof stays the create-agentic-workflow build-recipe §4 smoke',
+        // Read-only in BOTH modes, by design: a real dispatch burns LLM spend
+        // and leaves a sys_cs_conversation header row the platform refuses to
+        // delete even via global-scope setWorkflow(false) (build-recipe §5) —
+        // an un-cleanable sentinel, so there is deliberately no --full variant.
+        // Gate behaviour (live-verified 2026-06-12, .team/agent-findings/):
+        // the endpoint 500s "not supported" when
+        // ExternalAgentConfigurationDao.isExternalAgentEnabled() fails, i.e.
+        // when sn_aia.external_agents.enabled is off.
+        // Every step re-checks the filter client-side: an invalid sysparm_query
+        // field is silently IGNORED by the Table API (returns all rows), and
+        // the a2a API's own POST /agent/id routes would otherwise false-match.
+        async run() {
+            const aia = await api('GET', '/api/now/table/sn_aia_agent?sysparm_fields=sys_id&sysparm_limit=1')
+            if (aia.status === 400 || aia.status === 404) return na('sn_aia-absent', { http: aia.status }, 'quick')
+            if (aia.status !== 200) return err(`sn_aia-check-http-${aia.status}`, { http: aia.status, body: aia.body.slice(0, 200) }, 'quick')
+            const def = await api('GET', '/api/now/table/sys_ws_definition?sysparm_query=service_id=agenticai&sysparm_fields=sys_id,service_id&sysparm_limit=10')
+            if (def.status !== 200) return err(`definition-table-http-${def.status}`, { http: def.status, body: def.body.slice(0, 200) }, 'quick')
+            const defRow = (def.json()?.result || []).find((r) => r.service_id === 'agenticai')
+            if (!defRow) {
+                return no('api-definition-absent', { hint: 'no sys_ws_definition row with service_id=agenticai — an empty result can also be an ACL-filtered read (200 with zero rows); if unexpected, re-check sys_ws_definition readability as admin' }, 'quick')
+            }
+            const ops = await api('GET', `/api/now/table/sys_ws_operation?sysparm_query=web_service_definition=${defRow.sys_id}&sysparm_fields=relative_path,http_method&sysparm_limit=40`)
+            if (ops.status !== 200) return err(`operation-table-http-${ops.status}`, { http: ops.status, body: ops.body.slice(0, 200) }, 'quick')
+            const postRoutes = (ops.json()?.result || [])
+                .filter((r) => String(r.http_method).toUpperCase() === 'POST')
+                .map((r) => r.relative_path)
+            const agentRoutes = postRoutes.filter((p) => String(p).includes('agent'))
+            if (agentRoutes.length === 0) {
+                return no('dispatch-route-absent', { definition_sys_id: defRow.sys_id, post_routes_found: postRoutes.slice(0, 5) }, 'quick')
+            }
+            const prop = await api('GET', '/api/now/table/sys_properties?sysparm_query=name=sn_aia.external_agents.enabled&sysparm_fields=value&sysparm_limit=1')
+            if (prop.status !== 200) return err(`property-read-http-${prop.status}`, { http: prop.status, agent_routes: agentRoutes.slice(0, 5) }, 'quick')
+            const value = prop.json()?.result?.[0]?.value
+            if (value === 'true') return ok('route+gate-on', { definition_sys_id: defRow.sys_id, agent_routes: agentRoutes.slice(0, 5), property_value: value }, 'quick')
+            if (value === undefined) {
+                return no('property-unset', { definition_sys_id: defRow.sys_id, agent_routes: agentRoutes.slice(0, 5), hint: 'sn_aia.external_agents.enabled row absent (or ACL-hidden) — the platform default is unestablished; treat as gate-off until positive evidence (a live §4 smoke or the property set deliberately)' }, 'quick')
+            }
+            return no('property-disabled', { definition_sys_id: defRow.sys_id, agent_routes: agentRoutes.slice(0, 5), property_value: value }, 'quick')
+        },
+    },
+    {
         name: 'catalog.read',
         mode: 'quick',
         expected: 'Service Catalog tables are readable (sc_cat_item GET returns 200)',
