@@ -48,6 +48,10 @@ scripts/
   lib/                             sn-creds (layered resolution) · sn-rest · capability-report
 ```
 
+### Hook escape hatches — developer machines only
+
+Two env vars skip the shared hooks wired in `.claude/settings.json`: `SKIP_QUALITY_GATE=1` (Stop-hook quality gate) and `SKIP_PROBE_SUMMARY=1` (SessionStart capability summary). They exist for offline work and hook debugging on a developer machine — **never set them in CI**. CI runs the real gates directly (sanitize, unit tests) and enforces `.team/SHIP_HISTORY.md` as append-only with a dedicated workflow job, so a bypassed local gate never becomes a bypassed merge gate.
+
 ### The capability report — instance self-awareness
 
 `npm run probe:quick` probes the live instance and writes `.team/instance-capabilities.json`; every session starts by printing the OK/NO table. Code branches via `getCapability(name)` — stale or missing entries return `'unknown'`, and **the safe default for unknown is the previous-behaviour path**. Probes never assume; they observe. See `.claude/rules/capability-report.md` for the probe-authoring discipline.

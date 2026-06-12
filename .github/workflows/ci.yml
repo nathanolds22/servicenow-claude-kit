@@ -18,3 +18,42 @@ jobs:
         run: node scripts/lint-sanitize.js
       - name: Unit tests
         run: node --test scripts/__tests__/*.test.js
+
+  # .team/SHIP_HISTORY.md is the append-only audit log of /ship verdicts
+  # (.claude/commands/ship.md Phase 4). Appends are fine; any rewrite or
+  # deletion of existing lines fails the build.
+  ship-history-append-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the base branch / prior commit to diff against
+      - name: SHIP_HISTORY.md is append-only
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          FILE=".team/SHIP_HISTORY.md"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # Three-dot = diff from the merge-base, so only this PR's changes count.
+            RANGE="origin/${BASE_REF}...HEAD"
+          elif [ -z "$PUSH_BEFORE" ] || ! git cat-file -e "$PUSH_BEFORE" 2>/dev/null; then
+            # First push to a branch or force-push: no prior commit to compare.
+            echo "No prior commit to diff against — skipping append-only check."
+            exit 0
+          else
+            RANGE="${PUSH_BEFORE}..HEAD"
+          fi
+          # numstat column 2 = deleted lines. Empty = file untouched; 0 = pure
+          # append (including the initial seed, where the whole file is new).
+          DELETED=$(git diff --numstat "$RANGE" -- "$FILE" | awk '{print $2}')
+          if [ -z "$DELETED" ] || [ "$DELETED" = "0" ]; then
+            echo "$FILE append-only check OK (deleted lines: ${DELETED:-file untouched})"
+            exit 0
+          fi
+          echo "::error file=$FILE::$FILE is an append-only audit log of /ship verdicts; this change rewrites or deletes $DELETED existing line(s). Append new entries instead of editing history."
+          echo "Removed/modified lines:"
+          git diff "$RANGE" -- "$FILE" | grep '^-' | grep -v '^--- ' || true
+          exit 1
