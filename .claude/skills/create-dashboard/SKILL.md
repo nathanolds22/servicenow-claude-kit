@@ -16,7 +16,7 @@ An indicator with no collection-job linkage produces a no-data dashboard with ze
 
 ## 0. Gate
 
-`getCapability('pa.plugin_active')` must be `true`. PA authoring is Table API territory: the Fluent SDK has no pa_* coverage, and the `sn_pa` script namespace is blocked inside scoped-app sandboxes — automate via REST, not scoped scripts.
+`getCapability('pa.plugin_active')` must be `true`. PA authoring is Table API territory: the Fluent SDK has no pa_* coverage, and the `sn_pa` script namespace is blocked inside scoped-app sandboxes — automate via REST, not scoped scripts. The god-mode migration path in trap 5 additionally requires `getCapability('execute_script.available')` to be `true` — when it isn't (or is `unknown`), delete-and-recreate is the only safe reconfiguration path.
 
 ## 1. The five traps that cost real debugging time
 
@@ -26,7 +26,7 @@ All live-verified on a current release family ([reference/traps.md](reference/tr
 2. **`pa_scores_l1.indicator` stores the INTEGER `pa_indicators.id`**, not the sys_id. Read `id` back after the indicator insert and query scores with it.
 3. **You cannot force a run by PATCHing `sys_trigger.next_action`** — a BR recalculates it from the job's schedule grid, and any `sysauto_pa` update silently **recreates the trigger with a new sys_id**. Verified force mechanism: shrink the job's `run_period` to 1 minute, wait one fire, restore. Prove the run from `pa_job_logs`, never from the absence of errors.
 4. **Frozen / broadcast values**: a value identical across two collections means the second run never re-evaluated (check `pa_job_logs` `inserts`/`deletes` — healthy re-collection deletes and re-inserts the window). And one cube evaluates ONE scripted indicator and can broadcast its result to every indicator on that cube — give each scripted indicator its own `pa_cubes` row.
-5. **Post-creation edits to `cube` or `frequency` are rejected (403)** by the "PA Validate Update Frequency and Source" BR — route reconfigurations through a god-mode `GlideRecord.setWorkflow(false).update()`, or delete-and-recreate the indicator.
+5. **Post-creation edits to `cube` or `frequency` are rejected (403)** by the "PA Validate Update Frequency and Source" BR — route reconfigurations through a god-mode `GlideRecord.setWorkflow(false).update()` (only if `getCapability('execute_script.available')=true`), or delete-and-recreate the indicator.
 
 ## 2. Verify (the scores, not the records)
 

@@ -14,7 +14,7 @@ Fix: deploy the `pa_scripts` row first (script body + `table` matching the cube'
 
 ## 2. `pa_scores_l1.indicator` is the integer `pa_indicators.id` — **live**
 
-The scores surface joins on the indicator's auto-numbered integer `id` (e.g. `2054`), not the sys_id. Querying scores by sys_id silently returns zero rows. Also: `pa_scores_l1` returns **encoded** sys_ids (`__ENC__...`) — it's a view-shaped surface; you can't DELETE its rows directly. Score cleanup = delete the indicator (cascade, verified live).
+The scores surface joins on the indicator's auto-numbered integer `id` (a small platform-minted integer, not a GUID), not the sys_id. Querying scores by sys_id silently returns zero rows. Also: `pa_scores_l1` returns **encoded** sys_ids (`__ENC__...`) — it's a view-shaped surface; you can't DELETE its rows directly. Score cleanup = delete the indicator (cascade, verified live).
 
 ## 3. Forcing a collection run — **live, corrects an earlier recipe**
 
@@ -36,11 +36,11 @@ Two side-facts, both live: (a) any `sysauto_pa` update **recreates** the bound `
 
 ## 5. Locked-down indicator updates — **prod, BR name confirmed live**
 
-The "PA Validate Update Frequency and Source" BR 403-rejects UPDATEs that change `cube` or `frequency` on an existing indicator. Migrations (e.g. moving an indicator to its own cube to break a broadcast) go through god-mode `GlideRecord.setWorkflow(false).update()` — INSERTs stay on the normal POST path so the platform mints the integer `id` correctly.
+The "PA Validate Update Frequency and Source" BR 403-rejects UPDATEs that change `cube` or `frequency` on an existing indicator. Migrations (e.g. moving an indicator to its own cube to break a broadcast) go through god-mode `GlideRecord.setWorkflow(false).update()` — only with `getCapability('execute_script.available')=true`; otherwise delete-and-recreate. INSERTs stay on the normal POST path so the platform mints the integer `id` correctly.
 
 ## 6. Scoped-sandbox limits — **prod**
 
-The `sn_pa` script namespace is blocked inside scoped-app script sandboxes. PA automation belongs in admin basic-auth REST or global-scope god-mode scripts. Related: GlideAggregate inside scoped apps can silently cap at ~1k rows (see `.team/LESSONS.md`) — pa_scripts bodies run in PA's collector context, but any aggregate feeding a compliance number should be spot-checked against `GlideRecord` iteration.
+The `sn_pa` script namespace is blocked inside scoped-app script sandboxes. PA automation belongs in admin basic-auth REST — or global-scope god-mode scripts only where `getCapability('execute_script.available')=true`; with the capability `false`/`unknown`, Table API REST is the only automation path. Related: GlideAggregate inside scoped apps can silently cap at ~1k rows (see `.team/LESSONS.md`) — pa_scripts bodies run in PA's collector context, but any aggregate feeding a compliance number should be spot-checked against `GlideRecord` iteration.
 
 ## 7. Schema facts that differ from older docs — **live/prod**
 

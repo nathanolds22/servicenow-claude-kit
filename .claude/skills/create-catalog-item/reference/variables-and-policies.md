@@ -1,6 +1,6 @@
 # Variable sets and catalog UI policies (reference notes)
 
-Status: doc-grounded notes (official docs mirror), **not yet live-validated by the kit** — read back every write when you first use these, and promote anything surprising into the skill body.
+Status: doc-grounded notes (official docs mirror), **not yet live-validated by the kit** — confirm `getCapability('table_api.write')=true` before using these paths, read back every write (including the `applies_*` scope flags, whose Table-API defaults are unverified), and promote anything surprising into the skill body.
 
 ## Variable sets — reuse a question block across items
 

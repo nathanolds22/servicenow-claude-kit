@@ -1,6 +1,6 @@
 # GenAI capability subflows — the `_meta` envelope and model routing
 
-Production-verified on a current release family (direct-LLM pivot work in the source project; mechanism confirmed for all five OOTB model variants). Re-verify the table/SI names on your instance before relying on exact identifiers — this layer is platform-managed and release-sensitive.
+Production-verified on a current release family (mechanism confirmed for all five OOTB model variants during a direct-LLM pivot). Re-verify the table/SI names on your instance before relying on exact identifiers — this layer is platform-managed and release-sensitive.
 
 ## The shape of the problem
 
@@ -37,7 +37,9 @@ var r = sn_fd.FlowAPI.getRunner().subflow('<genai_subflow_fqn>').inForeground()
     }).run();
 ```
 
-`_meta.definition` forces the chosen model variant regardless of the platform's default routing — note that the higher-level `LLMClient.call({capability})` ignores the capability argument on some families and always routes to the platform default; the `_meta` envelope at subflow level is the reliable knob.
+If `prompt` carries DB-sourced text (knowledge bodies, user-typed fields), treat it as a prompt-injection surface — frame it as DATA with delimiters, and give any consuming agent a STOP CONDITION rejecting instruction-marker content, per `.claude/rules/ai-tools.md`.
+
+`_meta.definition` forces the chosen model variant regardless of the platform's default routing. The higher-level `LLMClient.call({capability})` has been observed (one release family; verify on yours) to ignore the capability argument and route to the platform default — the `_meta` envelope at subflow level is the reliable knob.
 
 ## Verify routing — then separate routing from provider health
 

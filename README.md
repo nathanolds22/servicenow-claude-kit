@@ -34,7 +34,9 @@ node install.js --into /path/to/existing-repo   # add --dry-run first if cautiou
                        capability-auditor · now-platform-best-practices · architect-cert-reviewer
   rules/               capability-report · ai-agents · ai-tools · a2a-exposure · fluent-metadata
   skills/              servicenow-docs (index → grep → read; no embeddings) ·
-                       a2a-usage (A2A decision tree + OAuth provisioning + smoke)
+                       a2a-usage (A2A decision tree + OAuth provisioning + smoke) ·
+                       create-dashboard · create-catalog-item · flows · create-agentic-workflow
+                       (live-validated build recipes with the platform traps baked in)
 .team/
   instance-capabilities.json   the capability report (probe-written, getCapability()-read)
   LESSONS.md                   20 production-verified, instance-independent platform gotchas
@@ -46,11 +48,17 @@ scripts/
   lint-sanitize.js                 banned-string gate (keep the kit/client repos clean)
   quality-gate.sh                  adaptive Stop-hook gate (runs only the gates that exist)
   lib/                             sn-creds (layered resolution) · sn-rest · capability-report
+.githooks/
+  pre-commit                       sanitize gate at commit time (activate: git config core.hooksPath .githooks)
 ```
 
 ### Hook escape hatches — developer machines only
 
 Two env vars skip the shared hooks wired in `.claude/settings.json`: `SKIP_QUALITY_GATE=1` (Stop-hook quality gate) and `SKIP_PROBE_SUMMARY=1` (SessionStart capability summary). They exist for offline work and hook debugging on a developer machine — **never set them in CI**. CI runs the real gates directly (sanitize, unit tests) and enforces `.team/SHIP_HISTORY.md` as append-only with a dedicated workflow job, so a bypassed local gate never becomes a bypassed merge gate.
+
+### Pre-commit sanitize gate
+
+The Stop hook and CI both run `npm run lint:sanitize`, but neither fires on a manual `git commit -a` — a banned-string commit could land on the local branch (and be pushed) before CI blocks it. The versioned hook in `.githooks/pre-commit` closes that gap by running the same gate at commit time; `lint-sanitize.js` scans tracked files from the git index, so the check matches exactly what the commit would record. Activate it per clone with `git config core.hooksPath .githooks` (`/bootstrap` step 5 does this; `install.js` copies the hook into overlay targets). Emergency bypass: `git commit --no-verify` — CI still enforces the gate.
 
 ### The capability report — instance self-awareness
 
@@ -70,7 +78,7 @@ The kit works day one with only the MCP server (read, analyze, build via MCP pow
 
 ## Roadmap
 
-- **Wave 2** — build-skills: `create-dashboard` (Platform Analytics, with the pa_scripts/integer-id/frozen-value traps baked in) · `create-catalog-item` · `flows` (lifecycle + FlowAPI invocation; honest about the no-programmatic-authoring boundary) · `create-agentic-workflow` (sn_aia anatomy, stop conditions, dispatch verification via A2A).
+- **Wave 2** *(shipped)* — build-skills: `create-dashboard` (Platform Analytics, with the pa_scripts/integer-id/frozen-value traps baked in) · `create-catalog-item` · `flows` (lifecycle + FlowAPI invocation; honest about the no-programmatic-authoring boundary) · `create-agentic-workflow` (sn_aia anatomy, stop conditions, dispatch verification).
 - **Wave 3** *(shipped)* — `a2a-usage` skill (decision tree + OAuth provisioning + smoke), `/deploy` (Fluent-adopted projects) + `/ship` read-only release gate.
 
 ## License

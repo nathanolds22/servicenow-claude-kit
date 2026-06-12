@@ -13,7 +13,7 @@ Variable sets and catalog UI policies come after the basics work; see [reference
 
 ## 0. Gate
 
-`getCapability('catalog.read')` and (for authoring) `catalog.writable` must be `true`. `unknown` → run `npm run probe:full` first, don't assume.
+`getCapability('catalog.read')` and (for authoring) `getCapability('catalog.writable')` must each return `true`. `unknown` → run `npm run probe:full` first, don't assume. Always go through `getCapability()` — never read the report JSON directly.
 
 ## 1. Look up the catalog — never hard-code its sys_id
 

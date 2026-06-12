@@ -59,7 +59,7 @@ Content-Type: application/json
 }
 ```
 
-Use a probe message that explicitly forbids tool invocation so the smoke is cheap and side-effect-free (the message text is a courtesy, not a defence — the defence is the Stage 0 stop-condition gate). For a synchronous smoke without callback infrastructure, set `"blocking": true` and omit `pushNotificationConfig` (async requires the callback-registry row — [provisioning.md](provisioning.md) step 5). Reserve a recognisable caller token — replace the placeholder with a concrete value like `smoke-<yyyymmdd>`; sending a literal `<project>-smoke` placeholder pollutes real-caller usage buckets — so dashboards can filter smoke traffic.
+Use a probe message that explicitly forbids tool invocation so the smoke is cheap and side-effect-free (the message text is a courtesy, not a defence — the defence is the Stage 0 stop-condition gate). Do not expect `"blocking": true` to spare you the callback registry: on current families the flag is ignored and `message/send` without a registered push config still fails with `-32602 "Push Notification URL is required for asynchronous requests"` (live-verified 2026-06-12) — the callback-registry row from [provisioning.md](provisioning.md) step 5 is required for every smoke. Reserve a recognisable caller token — replace the placeholder with a concrete value like `smoke-<yyyymmdd>`; sending a literal `<project>-smoke` placeholder pollutes real-caller usage buckets — so dashboards can filter smoke traffic.
 
 Interpret the status precisely:
 

@@ -18,6 +18,8 @@ GET /api/now/table/sys_hub_flow_input?sysparm_query=model=<flow_sys_id>&sysparm_
 GET /api/now/table/sys_hub_flow_output?sysparm_query=model=<flow_sys_id>&sysparm_fields=element,label,internal_type
 ```
 
+(`model` is the correct reference field on both tables — live-verified; a query on `flow` returns nothing.)
+
 `element` values are the exact keys for `.withInputs({...})` and the keys you'll read off `getOutputs()`. A wrong/missing key does not error at the API boundary — it surfaces later as `FlowObjectAPIException: ... The undefined value has no properties` from whichever flow step first dereferences the absent input (production-verified failure mode; eight payload-shape guesses all produced the identical error).
 
 ## 3. Invoke

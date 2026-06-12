@@ -39,7 +39,7 @@ When agent order is deterministic, enforce it with a state-machine BR / flow / s
 
 ## Dispatch stall diagnostics
 
-- **Four-field fingerprint**: a plan that reached an orchestrator carries `conversation`, `derived_scope`, `metadata`, `test_version`. A plan missing any was inserted off-pipeline and will sit at `state=ready` with `sys_mod_count=0` forever. First check on any stall.
+- **Four-field fingerprint**: a plan that reached an orchestrator carries `conversation`, `derived_scope`, `metadata`, `test_version`. A plan missing any was inserted off-pipeline and will sit at `state=ready` with `sys_mod_count=0` forever. First check on any stall. Scope caveat (live-verified): plans dispatched via the external-agent API (`/api/sn_aia/agenticai/v1/...`) legitimately omit `test_version` and still complete — judge API-path plans on the remaining three fields.
 - Direct Table-API POSTs to `sn_aia_execution_plan` no-op silently — they're not a dispatch path.
 - `sn_aia_execution_plan` has no `trigger_record` field on recent releases — use `related_task_record` + `related_task_table`; the "Insufficient rights" error querying the old field is a missing-column symptom, not ACL.
 - Studio Publish wipes trigger `run_as` — reconcile after every wizard run.

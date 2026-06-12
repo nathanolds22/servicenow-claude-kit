@@ -5,6 +5,10 @@ description: Work with Flow Designer flows on the connected ServiceNow instance 
 
 # Flows — lifecycle and invocation (not authoring)
 
+## 0. Gate
+
+`getCapability('flow_designer.api_available')` must be `true` (`unknown` → `npm run probe:quick` first). The god-mode script paths in §2/§3/§5 additionally require `getCapability('execute_script.available')` to be `true` — when it isn't, health checks and input discovery still work over plain Table API, but `sn_fd.FlowAPI` invocation and `setWorkflow(false)` updates have no remote path on that instance.
+
 ## 1. The honest boundary: you cannot author a flow programmatically
 
 A flow's executable logic lives in an opaque **compiled snapshot** (`sys_hub_flow.latest_snapshot` / `master_snapshot` → `sys_hub_flow_snapshot`), generated only by Flow Designer / Studio publish actions. Writing `sys_hub_flow` rows via REST produces a record with no working snapshot — the engine reads the snapshot, not the live row. Restoring a broken flow's `active`/`status` fields does **not** regenerate its snapshot either (production-verified: a flow restored to `active=1, published` after a bad regen still failed to dispatch until a manual Studio Publish rebuilt the snapshot).
@@ -26,7 +30,7 @@ GET /api/now/table/sys_hub_flow?sysparm_query=sys_id=<flow>&sysparm_fields=name,
 
 Healthy = `active=true`, `status=published`, snapshot fields non-empty. Check **every** flow your change could have touched, not just the one you edited:
 
-- REST updates to `sn_aia_trigger_configuration` fire `async_always` BRs that regenerate the bound flow and can leave it `active=false, status=draft` — **non-deterministically per flow**, so three of five may survive and two break (production-verified). Route trigger UPDATEs through god-mode `GlideRecord.setWorkflow(false).update()`; brand-new trigger INSERTs still need one manual Studio Publish. Full rule: `.claude/rules/fluent-metadata.md`.
+- REST updates to `sn_aia_trigger_configuration` fire `async_always` BRs that regenerate the bound flow and can leave it `active=false, status=draft` — **non-deterministically per flow**, so three of five may survive and two break (production-verified). Route trigger UPDATEs through god-mode `GlideRecord.setWorkflow(false).update()` (requires `execute_script.available=true`; without it the only safe path is the Studio UI); brand-new trigger INSERTs still need one manual Studio Publish. Full rule: `.claude/rules/fluent-metadata.md`.
 - Execution evidence: `sys_flow_context` rows (`state=COMPLETE`) — query by `flow=<sys_id>` ordered by `sys_created_on` to prove a flow actually ran.
 
 ## 3. Invoke programmatically — `sn_fd.FlowAPI`

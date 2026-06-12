@@ -39,7 +39,7 @@ POST /api/now/table/pa_indicators
 - Direction: 1=None 2=Minimize 3=Maximize.
 - There is no `pa_indicators.active` on recent families — `pa_job_indicators.collect_indicator` decides what collects.
 - **Immediately read back `sys_id,id`** — the integer `id` is the `pa_scores_l1` join key.
-- UPDATEs that change `cube` or `frequency` are 403-rejected by "PA Validate Update Frequency and Source"; use god-mode `setWorkflow(false)` for migrations.
+- UPDATEs that change `cube` or `frequency` are 403-rejected by "PA Validate Update Frequency and Source"; migrations go through god-mode `setWorkflow(false)` — gate on `getCapability('execute_script.available')=true`, else delete-and-recreate. INSERTs stay on plain REST so the platform mints the integer `id`.
 
 ## 4. Collection job — `sysauto_pa` + `pa_job_indicators`
 
