@@ -39,6 +39,8 @@ On current families the A2A task pipeline is **async-only** and demands a pre-re
 
 So a first-time A2A smoke needs a one-time per-caller setup: a callback registry row (`url`, `state=verified`) — inserting it auto-creates a connection/credential alias for the platform's outbound POSTs. Registering callbacks is shared instance configuration: agree it with the instance owner, one row per external caller, and point the URL at an endpoint that caller owns.
 
+> **Validation status**: the error rows of the table above are live-verified; the success row (registry-matched URL → `submitted` → `tasks/get`) is assembled from those signatures plus platform docs and has **not** been executed PASS by this kit's own validation — the registry row is operator-governed and needs a caller-owned endpoint. Details and retire-when: [.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md](../../../../.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md). Prove it on your instance with the `a2a-usage` smoke before declaring an agent A2A-callable.
+
 ## 4. The trigger-free alternative for build-time verification
 
 When you only need to prove the agent dispatches cleanly (not the A2A transport itself), skip the registry entirely: the internal external-agent API (`POST /api/sn_aia/agenticai/v1/agent/id/<sys_id>` — see [build-recipe.md](build-recipe.md) §4) runs the same plan pipeline with normal authentication and no callback requirement, and `debug_agent_execution` gives the full trace. Use A2A for what only A2A proves: the OAuth chain, card discovery, and external-caller reachability.

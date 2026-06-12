@@ -4,6 +4,8 @@ Five stages with PASS / BLOCKED / FAIL semantics: **BLOCKED** = the chain is bro
 
 Credentials resolve via the layered lookup in `scripts/lib/sn-creds.js` (`SERVICENOW_INSTANCE_URL` for the base URL, `A2A_OAUTH_CLIENT_ID` / `A2A_OAUTH_CLIENT_SECRET` for the OAuth client).
 
+> **Validation status**: Stages 0–2 and the Stage 3 *error* contract are live-verified. A full Stage 3 PASS → Stage 4 round-trip has **not** yet been executed by the kit's own validation (the callback registry row is operator-governed shared config and needs a caller-owned endpoint) — see [.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md](../../../../.team/agent-findings/2026-06-12-a2a-message-send-roundtrip-unverified.md). The first full PASS on your instance is part of adopting this recipe, not a formality.
+
 ## Stage 0 — stop-condition presence check (gate)
 
 Before sending anything, read the agent's instruction set (Table API GET on the `sn_aia_agent` record) and assert a STOP CONDITIONS block exists **and** explicitly rejects instruction-marker content (`<system>`, `Ignore previous`, `New instructions:`). Absent or softened → **BLOCKED**: do not smoke, and do not expose, an agent whose adversarial-input defence is missing (`.claude/rules/ai-agents.md` — stop conditions are load-bearing). Re-run this stage after every prompt bump of an exposed agent.
