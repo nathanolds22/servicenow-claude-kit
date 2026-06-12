@@ -1,0 +1,22 @@
+#!/bin/sh
+# .githooks/pre-commit — versioned pre-commit hook: the sanitize gate at commit time.
+#
+# The Stop hook and CI both run lint:sanitize, but neither fires on a manual
+# `git commit -a` — a banned-string commit can land on the local branch (and be
+# pushed) before CI blocks it. This hook closes that gap. lint-sanitize.js
+# scans tracked files from the git INDEX, so at pre-commit time it checks
+# exactly the content this commit would record — no flags needed.
+#
+# Activate once per clone (idempotent; /bootstrap step 5 does this):
+#
+#   git config core.hooksPath .githooks
+#
+# Emergency bypass: `git commit --no-verify` — CI still enforces the same gate.
+
+if ! command -v node >/dev/null 2>&1; then
+    echo "pre-commit: node not found on PATH — cannot run lint:sanitize; failing closed." >&2
+    echo "pre-commit: bypass once with 'git commit --no-verify' (CI still enforces the gate)." >&2
+    exit 1
+fi
+
+exec node "$(git rev-parse --show-toplevel)/scripts/lint-sanitize.js"
