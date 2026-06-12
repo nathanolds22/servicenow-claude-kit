@@ -14,6 +14,7 @@
     "flow_designer.api_available": { "status": "unknown", "expected": "sys_hub_flow readable — flow health checks possible", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "sn_aia.installed": { "status": "unknown", "expected": "AI Agents plugin installed, sn_aia_agent readable", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "sn_aia.agent_crud_available": { "status": "unknown", "expected": "sn_aia_agent create/delete works via Table API", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
+    "sn_aia.external_agent_api_available": { "status": "unknown", "expected": "External-agent dispatch API (POST /api/sn_aia/agenticai/v1/agent/id/<id>) deployed and property gate on — read-only route+property evidence; the live dispatch proof stays the build-recipe §4 smoke", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "catalog.read": { "status": "unknown", "expected": "sc_cat_item readable", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "catalog.writable": { "status": "unknown", "expected": "sc_cat_item create/delete works via Table API", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },
     "pa.plugin_active": { "status": "unknown", "expected": "Platform Analytics installed (pa_dashboards readable)", "observed": null, "probed_at": null, "probe_method": null, "evidence": null },

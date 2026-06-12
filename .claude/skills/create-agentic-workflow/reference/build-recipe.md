@@ -74,12 +74,18 @@ If the tool is agent-only (not callable from a UI approval path today), open the
 
 ## 4. Dispatch smoke (trigger-free)
 
+**Gate first** on `getCapability('sn_aia.external_agent_api_available')` (`scripts/lib/capability-report.js`; refresh with `npm run probe:quick`). The probe is read-only — POST route present in `sys_ws_operation` plus `sn_aia.external_agents.enabled=true` — it never dispatches, so this smoke remains the round-trip proof:
+
+- `true` → proceed with the POST below.
+- `false` → skip the POST; fall back to a Studio-test dispatch by the operator. Flipping `sn_aia.external_agents.enabled` is an operator decision, not a smoke prerequisite.
+- `unknown` (never probed / report stale) → previous-behaviour path: attempt the POST once; the 500 not-supported response IS the gate-off signal — stop and fall back as for `false`.
+
 ```json
 POST /api/sn_aia/agenticai/v1/agent/id/<agent_sys_id>
 { "request_id": "<unique>", "inputs": [{ "content_type": "text", "content": "<task text>" }], "metadata": {} }
 ```
 
-Response 200 `{status:"Success", metadata:{session_id, taskId}}` — the dispatch itself is async. Note: this endpoint is gated by the same external-agent property family as A2A and has **no capability-report probe yet** — do not infer its availability from `sn_aia.agent_crud_available`; the 500 not-supported response IS the signal, and on receiving it stop and fall back to a Studio-test dispatch by the operator.
+Response 200 `{status:"Success", metadata:{session_id, taskId}}` — the dispatch itself is async. A 500 not-supported after a green probe means the property gate flipped since the last probe: re-probe, record the regression, don't retry. Never infer this endpoint's availability from `sn_aia.agent_crud_available` — each capability is probed independently.
 
 (The round-trip documented here was validated with the config row's exposure flags already on; whether the endpoint dispatches with them at default `false` is unverified — if your smoke 400s or silently produces no plan, flip them for the smoke and restore afterwards.)
 

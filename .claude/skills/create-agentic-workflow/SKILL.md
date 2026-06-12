@@ -9,7 +9,7 @@ The law for this surface lives in [.claude/rules/ai-agents.md](../../rules/ai-ag
 
 ## 0. Gate
 
-`getCapability('sn_aia.installed')` and `getCapability('sn_aia.agent_crud_available')` must each return `true` (always via `getCapability()`, never by reading the report JSON directly).
+`getCapability('sn_aia.installed')` and `getCapability('sn_aia.agent_crud_available')` must each return `true` (always via `getCapability()`, never by reading the report JSON directly). The §3 trigger-free smoke additionally gates on `getCapability('sn_aia.external_agent_api_available')` — `false`/`unknown` fallbacks in build-recipe §4.
 
 ## 1. Agent anatomy — what actually lives where (live-verified)
 
@@ -37,7 +37,7 @@ Give every agent a **STOP CONDITIONS** block (no platform tool-error retry polic
 
 Dispatch the agent for real and read the trace:
 
-- **Trigger-free smoke** (no Studio Publish needed): `POST /api/sn_aia/agenticai/v1/agent/id/<agent_sys_id>` with `{request_id, inputs:[{content_type:"text", content:"<task>"}], metadata:{}}` — returns 200 + session_id, dispatches async. This is the platform's external-agent API; it exercises the same plan pipeline as production triggers.
+- **Trigger-free smoke** (no Studio Publish needed): `POST /api/sn_aia/agenticai/v1/agent/id/<agent_sys_id>` with `{request_id, inputs:[{content_type:"text", content:"<task>"}], metadata:{}}` — returns 200 + session_id, dispatches async. This is the platform's external-agent API; it exercises the same plan pipeline as production triggers. Gate on `getCapability('sn_aia.external_agent_api_available')` first — build-recipe §4 has the `false`/`unknown` fallbacks.
 - Poll `sn_aia_execution_plan` (query by `agent=<sys_id>`): healthy = `state` reaches `completed` with empty `state_reason`. `security_violation` = identity problem (check `sn_aia_agent_config.run_as_user` and the access-verification task output). Stuck at `ready` with `sys_mod_count=0` = inserted off-pipeline (see the dispatch-fingerprint rule).
 - `debug_agent_execution(<plan sys_id>)`: assert the Access Verification task shows `isAccessAllowed=true` for agent AND each tool, the ReAct step planned your tool with the right arguments, and the tool execution row is `Success` with your structured payload.
 - Fingerprint nuance (live-verified): API-path plans carry `conversation`, `derived_scope`, `metadata` but NOT `test_version` — that fourth field is populated by Studio test runs only.
