@@ -3,7 +3,7 @@
 `item_option_new` extends `question`, and the `type` choice list lives on the **parent** table — query `sys_choice` with `name=question`, not `name=item_option_new` (the latter returns zero rows; live-verified):
 
 ```
-GET /api/now/table/sys_choice?sysparm_query=name=question^element=type^inactive=false&sysparm_fields=value,label
+GET /api/now/table/sys_choice?sysparm_query=name=question^element=type^inactive=false&sysparm_fields=value,label&sysparm_limit=100
 ```
 
 Codes as read live from a current-family instance (re-run the query on yours before trusting an exotic one):

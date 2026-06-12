@@ -16,7 +16,7 @@ An indicator with no collection-job linkage produces a no-data dashboard with ze
 
 ## 0. Gate
 
-`getCapability('pa.plugin_active')` must be `true`. PA authoring is Table API territory: the Fluent SDK has no pa_* coverage, and the `sn_pa` script namespace is blocked inside scoped-app sandboxes — automate via REST, not scoped scripts. The god-mode migration path in trap 5 additionally requires `getCapability('execute_script.available')` to be `true` — when it isn't (or is `unknown`), delete-and-recreate is the only safe reconfiguration path.
+`getCapability('pa.plugin_active')` and `getCapability('table_api.write')` must both be `true` (`unknown` → `npm run probe:full` first) — every record in the chain is a Table API POST/PATCH. PA authoring is Table API territory: the Fluent SDK has no pa_* coverage, and the `sn_pa` script namespace is blocked inside scoped-app sandboxes — automate via REST, not scoped scripts. The god-mode migration path in trap 5 additionally requires `getCapability('execute_script.available')` to be `true` — when it isn't (or is `unknown`), delete-and-recreate is the only safe reconfiguration path.
 
 ## 1. The five traps that cost real debugging time
 

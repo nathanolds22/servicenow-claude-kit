@@ -318,6 +318,20 @@ const PROBES = [
         },
     },
     {
+        name: 'genai.capability_definitions_readable',
+        mode: 'quick',
+        expected: 'GenAI capability framework is present and readable (sys_one_extend_capability_definition GET returns 200) — gates the flows skill GenAI meta-envelope recipe; says nothing about provider entitlement/credentials, which only a live call proves',
+        async run() {
+            const res = await api('GET', '/api/now/table/sys_one_extend_capability_definition?sysparm_fields=sys_id&sysparm_limit=1')
+            if (res.status === 200) {
+                const rows = res.json()?.result || []
+                return ok('2xx', { http: res.status, has_rows: rows.length > 0 }, 'quick')
+            }
+            if (res.status === 400 || res.status === 404) return no('plugin-absent', { http: res.status }, 'quick')
+            return no(`http-${res.status}`, { http: res.status, body: res.body.slice(0, 200) }, 'quick')
+        },
+    },
+    {
         name: 'a2a.invocation_authenticated',
         mode: 'full',
         expected: 'OAuth client-credentials + a2aauthscope mints a Bearer token (A2A invocation auth chain is provisioned)',

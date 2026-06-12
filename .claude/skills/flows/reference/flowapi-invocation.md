@@ -5,9 +5,11 @@ Live-verified round-trip (current release family): the OOTB read-only subflow `g
 ## 1. Pick the FQN
 
 ```
-GET /api/now/table/sys_hub_flow?sysparm_query=active=true^status=published^type=subflow
-       &sysparm_fields=sys_id,name,internal_name,sys_scope.scope
+GET /api/now/table/sys_hub_flow?sysparm_query=active=true^status=published^type=subflow^nameLIKE<term>
+       &sysparm_fields=sys_id,name,internal_name,sys_scope.scope&sysparm_limit=50
 ```
+
+(Instances carry hundreds of OOTB flows — always narrow with `nameLIKE`/`sys_scope` and cap with `sysparm_limit` rather than pulling the whole table.)
 
 FQN = `<sys_scope.scope>.<internal_name>` (e.g. `global.check_record_access_for_user`). The display `name` does not work.
 

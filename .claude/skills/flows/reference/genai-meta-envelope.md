@@ -2,6 +2,8 @@
 
 Production-verified on a current release family (mechanism confirmed for all five OOTB model variants during a direct-LLM pivot). Re-verify the table/SI names on your instance before relying on exact identifiers — this layer is platform-managed and release-sensitive.
 
+**Gate**: `getCapability('genai.capability_definitions_readable')` must be `true` before relying on this recipe (`unknown` → `npm run probe:quick` first); invoking the subflow additionally needs `execute_script.available` per the SKILL.md §0 gate. The probe proves the framework tables exist — provider entitlement/credentials are a separate layer that only a live call proves (see the verification section below).
+
 ## The shape of the problem
 
 The OOTB "Generic Prompt" capability is ONE capability (`sys_one_extend_capability_definition` rows discriminate model variants via `filter_properties`). Each variant's `api` is a Flow Designer subflow with a single declared input: `input` (type json). The subflow's first action — the GenAI Preprocessor — hard-requires:
@@ -37,9 +39,17 @@ var r = sn_fd.FlowAPI.getRunner().subflow('<genai_subflow_fqn>').inForeground()
     }).run();
 ```
 
-If `prompt` carries DB-sourced text (knowledge bodies, user-typed fields), treat it as a prompt-injection surface — frame it as DATA with delimiters, and give any consuming agent a STOP CONDITION rejecting instruction-marker content, per `.claude/rules/ai-tools.md`.
+If `prompt` carries DB-sourced text (knowledge bodies, user-typed fields), treat it as a prompt-injection surface — frame it as DATA with delimiters, **cap its length at the boundary before interpolation** (an unbounded field can blow the context or smuggle a long injection payload), and give any consuming agent a STOP CONDITION rejecting instruction-marker content (`<system>`, `Ignore previous`, `New instructions:`), per `.claude/rules/ai-tools.md`.
 
 `_meta.definition` forces the chosen model variant regardless of the platform's default routing. The higher-level `LLMClient.call({capability})` has been observed (one release family; verify on yours) to ignore the capability argument and route to the platform default — the `_meta` envelope at subflow level is the reliable knob.
+
+## Operational mandates — every call path through this envelope
+
+This is a direct LLM call, so the `.claude/rules/ai-tools.md` mandates apply unchanged:
+
+- **Budget/circuit gate first** (agent-only paths): check the service's spend ceiling before invoking; return a structured error when tripped. Paths also reachable from a UI approval flow skip the gate.
+- **Usage-log write on every call**, wrapped in try/catch so a logger failure never breaks the primary write: service bucket, duration, cost estimate, parent record attribution. Use a separate bucket per pathway (e.g. `<service>_direct` for this envelope vs `<service>` for the sn_aia agent path) so operators can attribute spend per route.
+- **Prompt versioning still applies** (per `.claude/rules/ai-agents.md`, direct-LLM section): the prompt text sent through this envelope needs a documented version anchor, and every prompt bump needs a smoke/eval check before rollout. Record the model-selection rationale — `_meta.definition` is a deliberate routing choice, not a default; write down why that variant.
 
 ## Verify routing — then separate routing from provider health
 
